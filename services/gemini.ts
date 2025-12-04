@@ -1,7 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 import { FilesMap, ChatMessage } from "../types";
 
-const apiKey = process.env.API_KEY || '';
+// Safe access to API Key
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY || '';
+  } catch (e) {
+    console.warn("API Key not found in process.env");
+    return '';
+  }
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
 
 const BASE_SYSTEM_INSTRUCTION = `
