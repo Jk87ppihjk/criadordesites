@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone, Monitor, Tablet, RotateCw, Globe, Terminal, XCircle, AlertTriangle, Info, Database } from 'lucide-react';
 import { DevicePreview, LogEntry } from '../types';
@@ -41,9 +42,28 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ code, isGenerating, ac
     }
   }, [logs, showConsole]);
 
+  // Listen for messages from iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'CONSOLE_LOG') {
+        setLogs(prev => [...prev, {
+          type: event.data.logType,
+          message: event.data.message,
+          timestamp: new Date().toLocaleTimeString()
+        }]);
+      } else if (event.data?.type === 'NAVIGATE') {
+        onNavigate(event.data.url);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onNavigate]);
+
   const injectionScript = `
     <script>
       (function() {
+        // 1. Console Interception
         const originalLog = console.log;
         const originalError = console.error;
         const originalWarn = console.warn;
@@ -63,26 +83,63 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ code, isGenerating, ac
         console.error = function(...args) { sendLog('error', args); originalError.apply(console, args); };
         console.warn = function(...args) { sendLog('warn', args); originalWarn.apply(console, args); };
         console.info = function(...args) { sendLog('info', args); originalInfo.apply(console, args); };
-      })();
 
-      document.addEventListener('click', (e) => {
-        const link = e.target.closest('a');
-        if (link) {
-          const href = link.getAttribute('href');
-          if (href && !href.startsWith('http') && !href.startsWith('#')) {
-            e.preventDefault();
-            window.parent.postMessage({ type: 'NAVIGATE', url: href }, '*');
+        // 2. Navigation Helper
+        window.__navigate = function(url) {
+            console.log("Navigating to:", url);
+            window.parent.postMessage({ type: 'NAVIGATE', url: url }, '*');
+        };
+
+        // 3. Link Click Interception
+        document.addEventListener('click', (e) => {
+          const link = e.target.closest('a');
+          if (link) {
+            const href = link.getAttribute('href');
+            if (href && !href.startsWith('http') && !href.startsWith('#') && !href.startsWith('javascript:')) {
+              e.preventDefault();
+              window.__navigate(href);
+            }
           }
-        }
-      });
+        });
+
+        // 4. Form Submit Interception
+        document.addEventListener('submit', (e) => {
+            const form = e.target;
+            const action = form.getAttribute('action');
+            // If the form has an action to another page, intercept it
+            if (action && !action.startsWith('http') && !action.startsWith('#')) {
+                e.preventDefault();
+                // If there's no JS handler preventing default, we assume navigation
+                window.__navigate(action);
+            }
+            // Note: If JS handles the submit and does window.location, the regex replacement below handles it.
+        });
+
+      })();
     </script>
   `;
 
-  const finalCode = isHtml 
-    ? (code.includes('</body>') 
-        ? code.replace('</body>', `${injectionScript}</body>`)
-        : code + injectionScript)
-    : '';
+  // Prepare code with injections and polyfills
+  let finalCode = code;
+  
+  if (isHtml) {
+      // Regex Replace for JS Navigation:
+      // Replaces: window.location.href = 'url' -> window.__navigate('url')
+      // Replaces: window.location = 'url' -> window.__navigate('url')
+      // Replaces: window.location.assign('url') -> window.__navigate('url')
+      // This is a heuristic to make generated code work in the preview without real navigation.
+      
+      finalCode = finalCode.replace(/window\.location\.href\s*=\s*['"`](.*?)['"`]/g, "window.__navigate('$1')");
+      finalCode = finalCode.replace(/window\.location\s*=\s*['"`](.*?)['"`]/g, "window.__navigate('$1')");
+      finalCode = finalCode.replace(/window\.location\.assign\(['"`](.*?)['"`]\)/g, "window.__navigate('$1')");
+
+      // Inject script
+      if (finalCode.includes('</body>')) {
+          finalCode = finalCode.replace('</body>', `${injectionScript}</body>`);
+      } else {
+          finalCode = finalCode + injectionScript;
+      }
+  }
 
   if (!isHtml) {
     return (

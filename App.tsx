@@ -312,21 +312,33 @@ export function App() {
 
   // Logic to handle relative links in preview
   const handlePreviewNavigate = (path: string) => {
-      // If path is absolute or has folder, try directly
+      // 1. Try absolute match (already in files)
       if (files[path]) {
           setActiveFilename(path);
           return;
       }
 
-      // If path is relative (e.g., 'login.html') and we are in 'frontend/index.html'
-      const currentDir = activeFilename.includes('/') ? activeFilename.split('/')[0] : '';
+      // 2. Resolve relative path based on active file
+      // e.g., active: 'frontend/index.html', link: 'login.html' -> 'frontend/login.html'
+      const currentDir = activeFilename.includes('/') 
+          ? activeFilename.substring(0, activeFilename.lastIndexOf('/')) 
+          : '';
+          
       const relativePath = currentDir ? `${currentDir}/${path}` : path;
       
       if (files[relativePath]) {
           setActiveFilename(relativePath);
-      } else {
-          alert(`Arquivo não encontrado: ${path} (Tentado: ${relativePath})`);
+          return;
       }
+
+      // 3. Fallback: Check if it's in a common folder like 'frontend/' even if current isn't
+      const frontendPath = `frontend/${path}`;
+      if (files[frontendPath]) {
+          setActiveFilename(frontendPath);
+          return;
+      }
+
+      alert(`Arquivo não encontrado: ${path}\n(Tentado: ${relativePath})`);
   };
 
   useEffect(() => {
