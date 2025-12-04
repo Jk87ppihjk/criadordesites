@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
+      // ADICIONADO: Configuração de Preview para permitir o host público do Render
+      preview: {
+        host: true, // Garante que escuta em 0.0.0.0
+        allowedHosts: ['criadordesites.onrender.com'] 
+      },
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
