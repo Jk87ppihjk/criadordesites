@@ -1,0 +1,5 @@
+{
+  "name": "WebGenius AI Builder",
+  "description": "Um criador de sites inteligente que escreve código em tempo real e oferece preview instantâneo usando Google Gemini.",
+  "requestFramePermissions": []
+}
