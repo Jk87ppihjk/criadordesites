@@ -91,13 +91,20 @@ export const streamWebsiteCode = async (
     // Dynamic Instruction based on User Preference
     const modeInstruction = isBatchMode
       ? `
-      [MODO DE GERAÇÃO EM LOTE - FLUXO CONTÍNUO]
-      1. O usuário quer o projeto completo.
-      2. Gere APENAS UM arquivo de cada vez (o mais prioritário ou o próximo da lista).
-      3. Ao final da sua resposta, SE houver mais arquivos necessários para o sistema funcionar (css, js, outras páginas), adicione EXATAMENTE esta tag na última linha:
+      [MODO DE GERAÇÃO EM LOTE - MÁXIMA VELOCIDADE]
+      1. O usuário quer o projeto COMPLETO e FUNCIONAL.
+      2. Gere MÚLTIPLOS arquivos na mesma resposta, um após o outro. Não pause.
+      3. Exemplo de saída contínua:
+         <!-- FILENAME: index.html -->
+         \`\`\`html ... \`\`\`
+         <!-- FILENAME: style.css -->
+         \`\`\`css ... \`\`\`
+         <!-- FILENAME: script.js -->
+         \`\`\`js ... \`\`\`
+      4. Se a resposta for ficar longa demais (limite de tokens), pare o arquivo atual e use a tag:
          <!-- NEXT: nome_do_proximo_arquivo.ext -->
-      4. Se o projeto estiver 100% pronto e não precisar de mais arquivos, adicione:
-         <!-- PROJECT_COMPLETED -->
+         Isso fará o sistema pedir a continuação automaticamente.
+      5. Se terminar todos os arquivos, use: <!-- PROJECT_COMPLETED -->
       `
       : `
       [MODO PASSO-A-PASSO]

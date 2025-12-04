@@ -270,8 +270,8 @@ export function App() {
                 const fileToCreate = match[1].trim();
                 // Add a small delay to avoid hitting rate limits instantly
                 const timer = setTimeout(() => {
-                    handleSendMessage(`Criando automaticamente: ${fileToCreate}`);
-                }, 2000); // 2 second delay
+                    handleSendMessage(`Continuando automação: criando ${fileToCreate}`);
+                }, 500); // 0.5 second delay (Faster automation)
                 return () => clearTimeout(timer);
             }
         }
@@ -292,7 +292,7 @@ export function App() {
     }
 
     const instruction = isBatchMode 
-        ? `Plano Aprovado. Inicie a criação do ${startWith.toUpperCase()}. Comece pelo arquivo mais importante. Lembre-se de usar a tag NEXT: arquivo para continuar a sequência.`
+        ? `Plano Aprovado. Inicie a criação COMPLETA do ${startWith.toUpperCase()}. Gere TODOS os arquivos necessários agora (HTML, CSS, JS, etc) na mesma resposta ou em sequência rápida. Comece pelo mais importante.`
         : `Plano Aprovado. Comece criando APENAS o arquivo principal do ${startWith.toUpperCase()} (ex: index.html ou server.js).`;
 
     handleSendMessage(instruction);
