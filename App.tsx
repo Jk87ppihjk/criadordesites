@@ -192,7 +192,7 @@ export function App() {
           });
 
           // Check for NEXT FILE tag from Batch Mode
-          const nextFileRegex = //i;
+          const nextFileRegex = //i; // <--- CORREÇÃO DA REGEX AQUI!
           const nextFileMatch = fullResponse.match(nextFileRegex);
           let nextFile = null;
           if (nextFileMatch) {
