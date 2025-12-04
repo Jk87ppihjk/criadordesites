@@ -635,4 +635,3 @@ export function App() {
     </div>
     );
   }
-}
