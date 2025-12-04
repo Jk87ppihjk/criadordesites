@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight, User, Bot, Clock } from 'lucide-react';
+import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight, User, Bot, Clock, Folder } from 'lucide-react';
 import { streamWebsiteCode, cleanCode, parseResponseFiles, extractJsonPlan, applyPatches } from './services/gemini';
 import { CodeViewer } from './components/CodeViewer';
 import { LivePreview } from './components/LivePreview';
@@ -29,15 +29,29 @@ export function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const streamBufferRef = useRef('');
   const chatEndRef = useRef<HTMLDivElement>(null);
-  
-  // Snapshot for Patching
   const originalFilesSnapshot = useRef<FilesMap>({});
+
+  // --- Grouping Logic for Sidebar ---
+  const groupedFiles = React.useMemo(() => {
+    const groups: { frontend: string[], backend: string[], root: string[] } = {
+        frontend: [],
+        backend: [],
+        root: []
+    };
+    
+    Object.keys(files).sort().forEach(filename => {
+        if (filename.startsWith('frontend/')) groups.frontend.push(filename);
+        else if (filename.startsWith('backend/')) groups.backend.push(filename);
+        else groups.root.push(filename);
+    });
+    return groups;
+  }, [files]);
 
   // --- Initialization ---
 
   const startEmptyProject = () => {
     setFiles({
-      'index.html': `<!DOCTYPE html>
+      'frontend/index.html': `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -49,16 +63,16 @@ export function App() {
 </body>
 </html>`
     });
-    setActiveFilename('index.html');
+    setActiveFilename('frontend/index.html');
     setAppMode('ide');
-    addSystemMessage("Projeto vazio iniciado. O que vamos criar hoje?");
+    addSystemMessage("Projeto iniciado. Criei a estrutura de pastas para você. O que vamos construir?");
   };
 
   const startArchitectMode = () => {
     setFiles({});
     setActiveFilename('');
     setAppMode('ide');
-    addSystemMessage("Modo Arquiteto ativado. Descreva o sistema completo que você deseja (ex: 'Uma Loja Virtual de Roupas' ou 'Um Dashboard Financeiro'). Eu criarei o plano.");
+    addSystemMessage("Olá! Sou o WebCria, seu arquiteto de software. Descreva o sistema completo que você deseja (ex: 'Uma Loja Virtual de Roupas' ou 'Um Dashboard Financeiro'). Eu criarei o plano de arquitetura e a estrutura de pastas.");
   };
 
   const handleZipImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,41 +83,31 @@ export function App() {
         const content = await zip.loadAsync(file);
         const newFiles: FilesMap = {};
         
-        // Loop through all files in the zip
         for (const relativePath of Object.keys(content.files)) {
             const zipEntry = content.files[relativePath];
-            
-            // Skip directories and system files
             if (zipEntry.dir) continue;
             if (relativePath.includes('__MACOSX') || relativePath.includes('.DS_Store')) continue;
             
             const fileData = await zipEntry.async("string");
-            
-            // Flatten directory structure: Use only the file name
-            const fileName = relativePath.split('/').pop();
-            
-            if (fileName && fileName.trim() !== '') {
-                newFiles[fileName] = fileData;
-            }
+            // Keep folder structure if present, otherwise just filename
+            newFiles[relativePath] = fileData;
         }
         
         if (Object.keys(newFiles).length === 0) {
-            alert("Nenhum arquivo de código válido encontrado no ZIP.");
+            alert("Nenhum arquivo válido encontrado.");
             return;
         }
 
         setFiles(newFiles);
-        const firstFile = Object.keys(newFiles).find(f => f.endsWith('.html')) || Object.keys(newFiles)[0];
+        const firstFile = Object.keys(newFiles).find(f => f.endsWith('index.html')) || Object.keys(newFiles)[0];
         setActiveFilename(firstFile || '');
         setAppMode('ide');
-        addSystemMessage(`Projeto importado com sucesso! ${Object.keys(newFiles).length} arquivos carregados.`);
-        
-        // Reset input so same file can be selected again if needed
+        addSystemMessage(`Projeto importado! ${Object.keys(newFiles).length} arquivos carregados.`);
         e.target.value = '';
         
       } catch (err) {
         console.error(err);
-        alert("Erro ao ler arquivo ZIP. Certifique-se de que é um arquivo válido.");
+        alert("Erro ao ler ZIP.");
       }
     }
   };
@@ -118,7 +122,6 @@ export function App() {
     const textToSend = overridePrompt || prompt;
     if (!textToSend.trim() || isGenerating) return;
 
-    // Add User Message
     const newUserMsg: ChatMessage = { 
         id: Date.now().toString(), 
         role: 'user', 
@@ -129,8 +132,6 @@ export function App() {
     setPrompt('');
     setIsGenerating(true);
     streamBufferRef.current = '';
-    
-    // Snapshot files before generation for patching
     originalFilesSnapshot.current = { ...files };
 
     try {
@@ -141,26 +142,19 @@ export function App() {
         files,
         (chunk) => {
           streamBufferRef.current += chunk;
-          
-          // REAL-TIME PARSING:
           const partialFiles = parseResponseFiles(streamBufferRef.current);
           const foundFiles = Object.keys(partialFiles);
           
           if (foundFiles.length > 0) {
             setFiles(prev => {
                 const next = { ...prev };
-                // During stream, we just display the generated text (even if it is a patch)
-                // so the user can see what the AI is writing.
                 foundFiles.forEach(fname => {
                     next[fname] = partialFiles[fname];
                 });
                 return next;
             });
             
-            // Logic to switch active file if the AI starts writing a new one
             setActiveFilename(prev => {
-                // If we are currently viewing the file being written, stay. 
-                // If a new file appears that isn't the current one, switch to it to show progress.
                 const lastModifiedFile = foundFiles[foundFiles.length - 1];
                 if (lastModifiedFile && prev !== lastModifiedFile) {
                     return lastModifiedFile;
@@ -170,47 +164,40 @@ export function App() {
             });
           }
         },
-        isBatchMode // PASS BATCH MODE STATE
+        isBatchMode
       );
 
       const fullResponse = streamBufferRef.current;
-      
-      // Check for Plan
       const plan = extractJsonPlan(fullResponse);
+      
       if (plan) {
         setPendingPlan(plan);
         setChatHistory(prev => [...prev, { 
           id: Date.now().toString(), 
           role: 'model', 
-          text: "Criei um plano para o seu sistema. Analise abaixo e aprove para começar.",
+          text: fullResponse.replace(/```json[\s\S]*```/, '').trim() || "Analise o plano abaixo:", // Show descriptive text
           isPlan: true,
           planData: plan
         }]);
       } else {
-        // Final Parse & Patch Application
         const generatedFiles = parseResponseFiles(fullResponse);
         const fileNames = Object.keys(generatedFiles);
         
         if (fileNames.length > 0) {
-          // Now we apply patches properly using the snapshot
           setFiles(prev => {
               const finalFiles = { ...prev };
               fileNames.forEach(fname => {
                   const content = generatedFiles[fname];
-                  // Check if it is a patch
                   if (content.includes('<<<< SEARCH')) {
                       const original = originalFilesSnapshot.current[fname] || '';
-                      // Use robust fuzzy patch application
                       finalFiles[fname] = applyPatches(original, content);
                   } else {
-                      // Full rewrite
                       finalFiles[fname] = content;
                   }
               });
               return finalFiles;
           });
 
-          // Check for NEXT FILE tag from Batch Mode
           const nextFileRegex = /<!-- NEXT: (.+?) -->/i;
           const nextFileMatch = fullResponse.match(nextFileRegex);
           let nextFile = null;
@@ -218,19 +205,10 @@ export function App() {
               nextFile = nextFileMatch[1].trim();
           }
 
-          // Check for suggested next files in the text (heuristic fallback)
-          const suggestionRegex = /próximo arquivo lógico.*?['"](.+?)['"]/i;
-          const suggestionMatch = fullResponse.match(suggestionRegex);
-          let suggestion = null;
-          if (suggestionMatch && !files[suggestionMatch[1]]) {
-              suggestion = suggestionMatch[1];
-          }
-
           setChatHistory(prev => [...prev, { 
             id: Date.now().toString(), 
             role: 'model', 
-            text: `Código atualizado: ${fileNames.join(', ')}.${nextFile ? `\n[Auto] Preparando ${nextFile}...` : ''}`,
-            suggestedFile: suggestion || undefined
+            text: `Arquivos gerados: ${fileNames.join(', ')}.${nextFile ? `\n\n🔄 Automação: Iniciando ${nextFile}...` : ''}`,
           }]);
 
         } else {
@@ -244,22 +222,18 @@ export function App() {
 
     } catch (error: any) {
       console.error(error);
-      let errorMessage = "Erro ao conectar com a IA. Tente novamente.";
-      
-      if (error?.message?.includes('429') || error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED')) {
-        errorMessage = "⚠️ Cota de uso da IA excedida (Erro 429). Por favor, aguarde alguns instantes antes de tentar novamente ou verifique seu plano.";
-        // Stop batch mode if error occurs
+      let errorMessage = "Erro ao conectar com a IA.";
+      if (error?.message?.includes('429') || error?.status === 429) {
+        errorMessage = "⚠️ Cota excedida (Erro 429). Aguarde um momento.";
         setIsBatchMode(false);
       }
-      
       addSystemMessage(errorMessage);
     } finally {
       setIsGenerating(false);
-      originalFilesSnapshot.current = {}; // Clean up
+      originalFilesSnapshot.current = {}; 
     }
   };
 
-  // --- Auto-Chain Logic for Batch Mode ---
   useEffect(() => {
     if (!isGenerating && isBatchMode && chatHistory.length > 0) {
         const lastMsg = chatHistory[chatHistory.length - 1];
@@ -268,10 +242,9 @@ export function App() {
             const match = lastMsg.text.match(nextFileRegex);
             if (match) {
                 const fileToCreate = match[1].trim();
-                // Add a small delay to avoid hitting rate limits instantly
                 const timer = setTimeout(() => {
-                    handleSendMessage(`Continuando automação: criando ${fileToCreate}`);
-                }, 500); // 0.5 second delay (Faster automation)
+                    handleSendMessage(`Criando: ${fileToCreate}`);
+                }, 500); 
                 return () => clearTimeout(timer);
             }
         }
@@ -282,28 +255,19 @@ export function App() {
     if (!pendingPlan) return;
     setPendingPlan(null);
     
-    let structureList = '';
-    if (startWith === 'frontend' && Array.isArray(pendingPlan.structure?.frontend)) {
-        structureList = pendingPlan.structure.frontend.join(', ');
-    } else if (startWith === 'backend' && Array.isArray(pendingPlan.structure?.backend)) {
-        structureList = pendingPlan.structure.backend.join(', ');
-    } else {
-        structureList = 'os arquivos principais';
-    }
-
     const instruction = isBatchMode 
-        ? `Plano Aprovado. Inicie a criação COMPLETA do ${startWith.toUpperCase()}. Gere TODOS os arquivos necessários agora (HTML, CSS, JS, etc) na mesma resposta ou em sequência rápida. Comece pelo mais importante.`
-        : `Plano Aprovado. Comece criando APENAS o arquivo principal do ${startWith.toUpperCase()} (ex: index.html ou server.js).`;
+        ? `Plano Aprovado. Inicie o MODO BATCH. Crie TODOS os arquivos do ${startWith} em sequência.`
+        : `Plano Aprovado. Crie o arquivo principal do ${startWith} (ex: frontend/index.html ou backend/server.js).`;
 
     handleSendMessage(instruction);
   };
 
   const handleContinueGeneration = () => {
-    handleSendMessage("Continue gerando o código EXATAMENTE de onde parou na mensagem anterior.");
+    handleSendMessage("Continue gerando o código EXATAMENTE de onde parou.");
   };
 
   const handleDeleteFile = (filename: string) => {
-    if (confirm(`Tem certeza que deseja excluir ${filename}?`)) {
+    if (confirm(`Excluir ${filename}?`)) {
       setFiles(prev => {
         const next = { ...prev };
         delete next[filename];
@@ -316,7 +280,7 @@ export function App() {
   };
 
   const handleCreateNewFile = () => {
-    const name = window.prompt("Nome do arquivo (ex: script.js):");
+    const name = window.prompt("Nome do arquivo (ex: frontend/script.js):");
     if (name) {
       setFiles(prev => ({ ...prev, [name]: '// Novo arquivo' }));
       setActiveFilename(name);
@@ -332,7 +296,6 @@ export function App() {
   const handleExport = async () => {
     const zip = new JSZip();
     Object.entries(files).forEach(([filename, content]) => {
-      // Clean patching markers if present by accident
       const clean = content.includes('<<<< SEARCH') ? applyPatches(content, '') : cleanCode(content);
       zip.file(filename, clean);
     });
@@ -348,15 +311,32 @@ export function App() {
       handleSendMessage(`Crie o arquivo ${filename} agora.`);
   };
 
+  // Logic to handle relative links in preview
+  const handlePreviewNavigate = (path: string) => {
+      // If path is absolute or has folder, try directly
+      if (files[path]) {
+          setActiveFilename(path);
+          return;
+      }
+
+      // If path is relative (e.g., 'login.html') and we are in 'frontend/index.html'
+      const currentDir = activeFilename.includes('/') ? activeFilename.split('/')[0] : '';
+      const relativePath = currentDir ? `${currentDir}/${path}` : path;
+      
+      if (files[relativePath]) {
+          setActiveFilename(relativePath);
+      } else {
+          alert(`Arquivo não encontrado: ${path} (Tentado: ${relativePath})`);
+      }
+  };
+
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatHistory, isGenerating]);
 
-  // Helper to render message content with basic formatting
   const renderMessageText = (text: string) => {
-    // Basic bold formatting for **text**
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
@@ -373,7 +353,6 @@ export function App() {
             <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px]"></div>
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[100px]"></div>
         </div>
-
         <div className="z-10 max-w-4xl w-full p-8 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
            <div>
               <div className="flex items-center gap-3 mb-6">
@@ -387,36 +366,26 @@ export function App() {
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">em segundos.</span>
               </h2>
               <p className="text-gray-400 text-lg mb-8 leading-relaxed">
-                Um ambiente de desenvolvimento completo impulsionado por IA. 
-                De landing pages a sistemas full-stack, veja o código sendo escrito em tempo real.
+                Um ambiente de desenvolvimento completo. Frontend e Backend separados, automação inteligente e preview em tempo real.
               </p>
            </div>
-
            <div className="space-y-4">
               <button onClick={startEmptyProject} className="w-full bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between">
                  <div>
                     <h3 className="font-semibold text-xl mb-1 group-hover:text-blue-400 transition-colors">Projeto Vazio</h3>
-                    <p className="text-sm text-gray-400">Comece do zero com um editor limpo.</p>
+                    <p className="text-sm text-gray-400">Editor limpo com estrutura de pastas.</p>
                  </div>
                  <ArrowRight className="text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
               </button>
-
               <button onClick={startArchitectMode} className="w-full bg-gradient-to-r from-blue-600/10 to-purple-600/10 hover:from-blue-600/20 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between relative overflow-hidden border border-blue-500/30">
                  <div className="relative z-10">
                     <h3 className="font-semibold text-xl mb-1 text-blue-200">IA Arquiteto</h3>
-                    <p className="text-sm text-blue-200/60">Planeje e gere sistemas completos.</p>
+                    <p className="text-sm text-blue-200/60">Planeje sistemas completos (Front + Back).</p>
                  </div>
                  <Sparkles className="text-blue-400 relative z-10" />
-                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </button>
-
               <div className="relative w-full">
-                <input 
-                  type="file" 
-                  accept=".zip"
-                  onChange={handleZipImport}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                />
+                <input type="file" accept=".zip" onChange={handleZipImport} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" />
                 <div className="w-full bg-gray-800/50 hover:bg-gray-800 border border-gray-700 border-dashed hover:border-gray-500 p-6 rounded-2xl text-left transition-all flex items-center justify-between">
                     <div>
                         <h3 className="font-semibold text-xl mb-1">Importar ZIP</h3>
@@ -440,21 +409,16 @@ export function App() {
           </div>
           <h1 className="font-bold text-sm tracking-tight text-gray-100">WebCria AI</h1>
         </div>
-        
         <div className="flex items-center gap-3">
-            <button 
-              onClick={handleExport}
-              className="flex items-center gap-2 text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md transition border border-gray-700"
-            >
-                <Download size={14} /> Exportar ZIP
+            <button onClick={handleExport} className="flex items-center gap-2 text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md transition border border-gray-700">
+                <Download size={14} /> ZIP
             </button>
-
             <div className="flex bg-gray-900/50 p-1 rounded-lg border border-gray-800/50">
               <button onClick={() => setActiveTab('code')} className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium transition-all ${activeTab === 'code' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}>
                 <Code size={14} /> Editor
               </button>
               <button onClick={() => setActiveTab('both')} className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium transition-all ${activeTab === 'both' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}>
-                <Layers size={14} /> Dividido
+                <Layers size={14} /> Split
               </button>
               <button onClick={() => setActiveTab('preview')} className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium transition-all ${activeTab === 'preview' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}>
                 <Layout size={14} /> Preview
@@ -465,40 +429,50 @@ export function App() {
 
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Sidebar Left: Files */}
+        {/* Sidebar Left: Files with Grouping */}
         <div className="w-64 flex flex-col border-r border-gray-800 bg-[#0d1117] shrink-0 z-10">
           <div className="h-10 px-3 border-b border-gray-800 bg-gray-900 flex items-center justify-between shrink-0">
                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                 <FolderOpen size={12}/> Arquivos
+                 <FolderOpen size={12}/> Explorador
                </span>
                <button onClick={handleCreateNewFile} className="text-gray-500 hover:text-blue-400 transition p-1 hover:bg-gray-800 rounded">
                  <Plus size={14} />
                </button>
           </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
             {Object.keys(files).length === 0 && (
-                <div className="text-center py-8 text-gray-600 text-xs italic">Sem arquivos.</div>
+                <div className="text-center py-8 text-gray-600 text-xs italic">Projeto Vazio</div>
             )}
-            {Object.keys(files).map(filename => (
-              <div key={filename} className="group flex items-center justify-between pr-2 rounded-lg hover:bg-gray-800 transition-colors">
-                  <button
-                    onClick={() => setActiveFilename(filename)}
-                    className={`flex-1 text-left px-3 py-2 text-sm font-mono flex items-center gap-2 truncate ${activeFilename === filename ? 'text-blue-400 font-medium' : 'text-gray-400'}`}
-                  >
-                    {filename.endsWith('.html') ? <FileCode size={14} className="text-orange-400 shrink-0" /> : 
-                     filename.endsWith('.css') ? <Layout size={14} className="text-blue-400 shrink-0" /> :
-                     filename.endsWith('.js') ? <FileJson size={14} className="text-yellow-400 shrink-0" /> :
-                     <FileText size={14} className="text-gray-500 shrink-0" />}
-                    <span className="truncate">{filename}</span>
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteFile(filename)}
-                    className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 p-1 transition-all"
-                  >
-                      <Trash2 size={12} />
-                  </button>
-              </div>
-            ))}
+            
+            {/* Frontend Group */}
+            {groupedFiles.frontend.length > 0 && (
+                <div>
+                    <div className="px-2 text-[10px] font-bold text-gray-500 uppercase mb-1 flex items-center gap-1"><Monitor size={10}/> Frontend</div>
+                    {groupedFiles.frontend.map(filename => (
+                        <FileItem key={filename} filename={filename} activeFilename={activeFilename} setActive={setActiveFilename} onDelete={handleDeleteFile} />
+                    ))}
+                </div>
+            )}
+
+            {/* Backend Group */}
+            {groupedFiles.backend.length > 0 && (
+                <div>
+                    <div className="px-2 text-[10px] font-bold text-gray-500 uppercase mb-1 mt-2 flex items-center gap-1"><Server size={10}/> Backend</div>
+                    {groupedFiles.backend.map(filename => (
+                        <FileItem key={filename} filename={filename} activeFilename={activeFilename} setActive={setActiveFilename} onDelete={handleDeleteFile} />
+                    ))}
+                </div>
+            )}
+
+            {/* Root/Other Group */}
+            {groupedFiles.root.length > 0 && (
+                <div>
+                    <div className="px-2 text-[10px] font-bold text-gray-500 uppercase mb-1 mt-2 flex items-center gap-1"><Folder size={10}/> Config</div>
+                    {groupedFiles.root.map(filename => (
+                        <FileItem key={filename} filename={filename} activeFilename={activeFilename} setActive={setActiveFilename} onDelete={handleDeleteFile} />
+                    ))}
+                </div>
+            )}
           </div>
         </div>
 
@@ -506,37 +480,22 @@ export function App() {
         <div className="w-80 flex flex-col border-r border-gray-800 bg-[#0d1117] shrink-0 z-10">
              <div className="h-10 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                  <MessageSquare size={12}/> Chat
-                </span>
-                <span className="text-[10px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">
-                   v2.0
+                  <MessageSquare size={12}/> Assistente
                 </span>
              </div>
              
-             {/* Chat History Area */}
              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
                 {chatHistory.map((msg, index) => (
                     <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                        {/* Avatar */}
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                            msg.role === 'user' ? 'bg-blue-600' : 
-                            msg.role === 'model' ? 'bg-indigo-600' : 'bg-gray-700'
-                        }`}>
-                            {msg.role === 'user' ? <User size={14} /> : 
-                             msg.role === 'model' ? <Bot size={14} /> : <Zap size={14} />}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-blue-600' : msg.role === 'model' ? 'bg-indigo-600' : 'bg-gray-700'}`}>
+                            {msg.role === 'user' ? <User size={14} /> : msg.role === 'model' ? <Bot size={14} /> : <Zap size={14} />}
                         </div>
-
-                        {/* Bubble */}
                         <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase">
                                     {msg.role === 'user' ? 'Você' : msg.role === 'model' ? 'WebCria' : 'Sistema'}
                                 </span>
-                                <span className="text-[10px] text-gray-600 flex items-center gap-0.5">
-                                    {new Date(parseInt(msg.id)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </span>
                             </div>
-
                             <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${
                                 msg.role === 'user' 
                                 ? 'bg-blue-600 text-white rounded-tr-none' 
@@ -549,31 +508,22 @@ export function App() {
                                 {msg.isPlan && msg.planData && (
                                     <div className="mt-3 bg-gray-900 rounded-lg p-3 border border-gray-700">
                                         <div className="text-xs font-mono mb-2 text-green-400 font-bold uppercase flex items-center gap-2">
-                                            <Sparkles size={10}/> Plano Sugerido
+                                            <Sparkles size={10}/> Plano de Arquitetura
                                         </div>
                                         <div className="grid gap-2">
-                                            <button 
-                                                onClick={() => handleApprovePlan('frontend')}
-                                                className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group"
-                                            >
-                                                <span className="flex items-center gap-2"><Monitor size={12}/> Criar Frontend</span>
+                                            <button onClick={() => handleApprovePlan('frontend')} className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group">
+                                                <span className="flex items-center gap-2"><Monitor size={12}/> Iniciar Frontend</span>
                                                 <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400"/>
                                             </button>
-                                            <button 
-                                                onClick={() => handleApprovePlan('backend')}
-                                                className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group"
-                                            >
-                                                <span className="flex items-center gap-2"><Server size={12}/> Criar Backend</span>
+                                            <button onClick={() => handleApprovePlan('backend')} className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group">
+                                                <span className="flex items-center gap-2"><Server size={12}/> Iniciar Backend</span>
                                                 <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400"/>
                                             </button>
                                         </div>
                                     </div>
                                 )}
                                 {msg.suggestedFile && (
-                                    <button 
-                                        onClick={() => handleCreateSuggestion(msg.suggestedFile!)}
-                                        className="mt-3 w-full text-xs flex items-center justify-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 py-2 rounded border border-blue-500/30 transition"
-                                    >
+                                    <button onClick={() => handleCreateSuggestion(msg.suggestedFile!)} className="mt-3 w-full text-xs flex items-center justify-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 py-2 rounded border border-blue-500/30 transition">
                                         <Plus size={10} /> Criar <span className="font-mono font-bold">{msg.suggestedFile}</span>
                                     </button>
                                 )}
@@ -583,12 +533,8 @@ export function App() {
                 ))}
                 {isGenerating && (
                     <div className="flex items-center gap-3 pl-1">
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
-                             <Loader2 size={14} className="animate-spin text-white"/>
-                        </div>
-                        <div className="text-gray-500 text-xs italic animate-pulse">
-                            Escrevendo código...
-                        </div>
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0"><Loader2 size={14} className="animate-spin text-white"/></div>
+                        <div className="text-gray-500 text-xs italic animate-pulse">WebCria está digitando...</div>
                     </div>
                 )}
                 <div ref={chatEndRef} />
@@ -596,11 +542,8 @@ export function App() {
 
              {!isGenerating && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'model' && (
                  <div className="px-4 pb-2">
-                    <button 
-                        onClick={handleContinueGeneration}
-                        className="w-full text-xs flex items-center justify-center gap-1 text-gray-500 hover:text-blue-400 py-2 border-t border-gray-800 hover:bg-gray-900 transition"
-                    >
-                        <RotateCcw size={10} /> Continuar caso tenha cortado
+                    <button onClick={handleContinueGeneration} className="w-full text-xs flex items-center justify-center gap-1 text-gray-500 hover:text-blue-400 py-2 border-t border-gray-800 hover:bg-gray-900 transition">
+                        <RotateCcw size={10} /> Continuar geração
                     </button>
                  </div>
              )}
@@ -608,33 +551,15 @@ export function App() {
              <div className="p-3 bg-[#0d1117] border-t border-gray-800 shrink-0">
                 <div className="flex items-center justify-between px-1 pb-2">
                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => setIsBatchMode(!isBatchMode)}
-                        className={`flex items-center gap-2 text-[10px] font-medium px-3 py-1.5 rounded-full transition-colors border ${isBatchMode ? 'bg-purple-900/20 text-purple-300 border-purple-800' : 'bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-500'}`}
-                        title={isBatchMode ? "A IA criará todos os arquivos sequencialmente" : "A IA criará um arquivo por vez e perguntará"}
-                      >
+                      <button onClick={() => setIsBatchMode(!isBatchMode)} className={`flex items-center gap-2 text-[10px] font-medium px-3 py-1.5 rounded-full transition-colors border ${isBatchMode ? 'bg-purple-900/20 text-purple-300 border-purple-800' : 'bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-500'}`} title={isBatchMode ? "Cria tudo de uma vez" : "Passo a passo"}>
                          {isBatchMode ? <ToggleRight size={14} className="text-purple-400"/> : <ToggleLeft size={14}/>}
-                         {isBatchMode ? "Modo Automático (Batch)" : "Modo Interativo"}
+                         {isBatchMode ? "Modo Batch (Auto)" : "Modo Interativo"}
                       </button>
                    </div>
                 </div>
-
                 <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="relative group">
-                    <textarea
-                      ref={textareaRef}
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                      placeholder="Instrua o WebCria..."
-                      className="w-full bg-gray-900 group-hover:bg-gray-800 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-800 resize-none min-h-[50px] max-h-[150px] placeholder-gray-500 border border-gray-800 transition-all shadow-inner"
-                      rows={1}
-                      disabled={isGenerating}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!prompt.trim() || isGenerating}
-                      className="absolute right-2 bottom-2.5 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-0 disabled:scale-90 shadow-lg shadow-blue-900/20"
-                    >
+                    <textarea ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Fale com o arquiteto..." className="w-full bg-gray-900 group-hover:bg-gray-800 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-800 resize-none min-h-[50px] max-h-[150px] placeholder-gray-500 border border-gray-800 transition-all shadow-inner" rows={1} disabled={isGenerating} />
+                    <button type="submit" disabled={!prompt.trim() || isGenerating} className="absolute right-2 bottom-2.5 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-0 disabled:scale-90 shadow-lg shadow-blue-900/20">
                       <Send size={16} />
                     </button>
                 </form>
@@ -651,34 +576,19 @@ export function App() {
                            <span className="text-gray-400">Arquivo:</span>
                            <span className="text-yellow-500 font-semibold">{activeFilename}</span>
                            {files[activeFilename]?.includes('<<<< SEARCH') && (
-                               <span className="text-purple-400 text-[10px] uppercase font-bold px-1.5 py-0.5 bg-purple-900/30 rounded border border-purple-800 ml-2">Patch Mode</span>
+                               <span className="text-purple-400 text-[10px] uppercase font-bold px-1.5 py-0.5 bg-purple-900/30 rounded border border-purple-800 ml-2">Patch</span>
                            )}
                        </>
-                   ) : (
-                       <span className="text-gray-600">Nenhum arquivo selecionado</span>
-                   )}
+                   ) : <span className="text-gray-600">Selecione um arquivo</span>}
                  </span>
-                 
                  {activeFilename && (
-                     <button 
-                        onClick={() => {
-                            navigator.clipboard.writeText(files[activeFilename]);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
-                        }}
-                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
-                     >
+                     <button onClick={() => { navigator.clipboard.writeText(files[activeFilename]); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
                         {copied ? <Check size={12} className="text-green-400"/> : <Copy size={12}/>}
                      </button>
                  )}
               </div>
-              
               <div className="flex-1 min-h-0 relative">
-                <CodeViewer 
-                    code={files[activeFilename] || ''} 
-                    isGenerating={isGenerating} 
-                    onChange={handleCodeUpdate}
-                />
+                <CodeViewer code={files[activeFilename] || ''} isGenerating={isGenerating} onChange={handleCodeUpdate} />
               </div>
             </div>
           )}
@@ -689,15 +599,26 @@ export function App() {
                 code={files[activeFilename] || ''} 
                 isGenerating={isGenerating} 
                 activeFilename={activeFilename}
-                onNavigate={(href) => {
-                    if (files[href]) setActiveFilename(href);
-                    else alert(`Arquivo ${href} não encontrado.`);
-                }}
+                onNavigate={handlePreviewNavigate}
               />
             </div>
           )}
         </div>
       </div>
     </div>
-    );
-  }
+  );
+}
+
+const FileItem = ({ filename, activeFilename, setActive, onDelete }: any) => (
+  <div className="group flex items-center justify-between pr-2 rounded-lg hover:bg-gray-800 transition-colors">
+      <button onClick={() => setActive(filename)} className={`flex-1 text-left px-3 py-1.5 text-sm font-mono flex items-center gap-2 truncate ${activeFilename === filename ? 'text-blue-400 font-medium' : 'text-gray-400'}`}>
+        {filename.endsWith('.html') ? <FileCode size={14} className="text-orange-400 shrink-0" /> : 
+         filename.endsWith('.css') ? <Layout size={14} className="text-blue-400 shrink-0" /> :
+         filename.endsWith('.js') ? <FileJson size={14} className="text-yellow-400 shrink-0" /> :
+         filename.includes('.env') ? <Database size={14} className="text-green-400 shrink-0" /> :
+         <FileText size={14} className="text-gray-500 shrink-0" />}
+        <span className="truncate">{filename.split('/').pop()}</span>
+      </button>
+      <button onClick={() => onDelete(filename)} className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 p-1 transition-all"><Trash2 size={12} /></button>
+  </div>
+);
