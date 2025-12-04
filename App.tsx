@@ -192,7 +192,7 @@ export function App() {
           });
 
           // Check for NEXT FILE tag from Batch Mode
-          const nextFileRegex = /<!-- NEXT: (.+?) -->/i;
+          const nextFileRegex = //i;
           const nextFileMatch = fullResponse.match(nextFileRegex);
           let nextFile = null;
           if (nextFileMatch) {
@@ -245,7 +245,7 @@ export function App() {
     if (!isGenerating && isBatchMode && chatHistory.length > 0) {
         const lastMsg = chatHistory[chatHistory.length - 1];
         if (lastMsg.role === 'model') {
-            const nextFileRegex = /<!-- NEXT: (.+?) -->/i;
+            const nextFileRegex = //i;
             const match = lastMsg.text.match(nextFileRegex);
             if (match) {
                 const fileToCreate = match[1].trim();
@@ -632,6 +632,7 @@ export function App() {
           )}
         </div>
       </div>
+    </div> 
     );
   }
 }
