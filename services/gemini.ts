@@ -34,14 +34,15 @@ Criar interfaces visuais deslumbrantes, responsivas e modernas.
 - Stack Principal: HTML5, Tailwind CSS (via CDN), Vanilla JS (para interatividade DOM) ou React (se solicitado).
 - Foco: Animações suaves, paleta de cores harmoniosa, tipografia excelente e acessibilidade.
 
-ESTRUTURA:
+ESTRUTURA E REGRAS:
 - Salve tudo na pasta \`frontend/\`.
-- Ex: \`frontend/index.html\`, \`frontend/app.js\`, \`frontend/styles.css\`.
+- **REGRA DE OURO (SINGLE FILE):** NÃO crie arquivos .css ou .js separados. Todo o CSS (style) e JavaScript (script) deve estar EMBUTIDO dentro do arquivo .html.
+- Ex: \`frontend/index.html\` (contém <style>...</style> e <script>...</script>).
 
-REGRAS:
-1. Use Tailwind CSS para tudo.
-2. Adicione imagens de placeholder (via Unsplash/Picsum) para dar vida ao layout.
-3. Se o usuário pedir "Login", faça a tela mais bonita possível, não foque no backend.
+DESIGN:
+1. Use Tailwind CSS via CDN para estilização rápida.
+2. Adicione CSS customizado extra na tag <style> para animações ou efeitos glassmorphism.
+3. Adicione imagens de placeholder (via Unsplash/Picsum) para dar vida ao layout.
 ${COMMON_RULES}
 `;
 
@@ -83,12 +84,13 @@ SUA MISSÃO:
 Orquestrar a criação de sistemas completos.
 
 ESTRUTURA OBRIGATÓRIA:
-1. **Frontend**: \`frontend/index.html\`, \`frontend/style.css\`. (Use Tailwind).
+1. **Frontend**: \`frontend/index.html\`. **REGRA DE OURO:** Tudo embutido. CSS via <style> ou Tailwind, JS via <script>. NÃO crie arquivos CSS/JS separados para o front.
 2. **Backend**: \`backend/server.js\`, \`backend/routes/...\`. (Node.js + Express).
 3. **Config**: \`root/package.json\`.
 
 REGRAS:
-- Ao criar Backend, prefira Node.js com Express.
+- Ao criar Backend, prefira Node.js com Express e separe em arquivos (modular).
+- Ao criar Frontend, use ARQUIVO ÚNICO (.html com tudo dentro).
 - Sempre crie \`backend/.env.example\`.
 - Conecte o frontend ao backend via \`fetch\`.
 - No modo Arquiteto, desenhe o plano JSON antes.
@@ -289,4 +291,4 @@ export const applyPatches = (original: string, patch: string): string => {
   }
   
   return result;
-};
+}; 
