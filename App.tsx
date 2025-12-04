@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight, User, Bot, Clock } from 'lucide-react';
 import { streamWebsiteCode, cleanCode, parseResponseFiles, extractJsonPlan, applyPatches } from './services/gemini';
 import { CodeViewer } from './components/CodeViewer';
 import { LivePreview } from './components/LivePreview';
@@ -69,22 +69,41 @@ export function App() {
         const content = await zip.loadAsync(file);
         const newFiles: FilesMap = {};
         
+        // Loop through all files in the zip
         for (const relativePath of Object.keys(content.files)) {
-          if (!content.files[relativePath].dir) {
-            const fileData = await content.files[relativePath].async("string");
-            const fileName = relativePath.split('/').pop() || relativePath;
-            newFiles[fileName] = fileData;
-          }
+            const zipEntry = content.files[relativePath];
+            
+            // Skip directories and system files
+            if (zipEntry.dir) continue;
+            if (relativePath.includes('__MACOSX') || relativePath.includes('.DS_Store')) continue;
+            
+            const fileData = await zipEntry.async("string");
+            
+            // Flatten directory structure: Use only the file name
+            const fileName = relativePath.split('/').pop();
+            
+            if (fileName && fileName.trim() !== '') {
+                newFiles[fileName] = fileData;
+            }
         }
         
+        if (Object.keys(newFiles).length === 0) {
+            alert("Nenhum arquivo de código válido encontrado no ZIP.");
+            return;
+        }
+
         setFiles(newFiles);
         const firstFile = Object.keys(newFiles).find(f => f.endsWith('.html')) || Object.keys(newFiles)[0];
         setActiveFilename(firstFile || '');
         setAppMode('ide');
         addSystemMessage(`Projeto importado com sucesso! ${Object.keys(newFiles).length} arquivos carregados.`);
+        
+        // Reset input so same file can be selected again if needed
+        e.target.value = '';
+        
       } catch (err) {
         console.error(err);
-        alert("Erro ao ler arquivo ZIP.");
+        alert("Erro ao ler arquivo ZIP. Certifique-se de que é um arquivo válido.");
       }
     }
   };
@@ -335,6 +354,18 @@ export function App() {
     }
   }, [chatHistory, isGenerating]);
 
+  // Helper to render message content with basic formatting
+  const renderMessageText = (text: string) => {
+    // Basic bold formatting for **text**
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   if (appMode === 'welcome') {
     return (
       <div className="h-screen w-screen bg-[#0f172a] text-white flex items-center justify-center relative overflow-hidden">
@@ -473,56 +504,91 @@ export function App() {
 
         {/* Sidebar Middle: Chat */}
         <div className="w-80 flex flex-col border-r border-gray-800 bg-[#0d1117] shrink-0 z-10">
-             <div className="h-10 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0">
+             <div className="h-10 border-b border-gray-800 bg-gray-900 flex items-center px-4 shrink-0 justify-between">
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                  <MessageSquare size={12}/> Assistente
+                  <MessageSquare size={12}/> Chat
+                </span>
+                <span className="text-[10px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">
+                   v2.0
                 </span>
              </div>
-             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
-                {chatHistory.map((msg) => (
-                    <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        <div className={`max-w-[90%] rounded-xl p-3 text-sm leading-relaxed ${
-                            msg.role === 'user' 
-                            ? 'bg-blue-600 text-white rounded-br-none' 
-                            : msg.role === 'system'
-                            ? 'bg-gray-800/50 text-gray-400 text-xs border border-dashed border-gray-700 w-full text-center'
-                            : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'
+             
+             {/* Chat History Area */}
+             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-6">
+                {chatHistory.map((msg, index) => (
+                    <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        {/* Avatar */}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                            msg.role === 'user' ? 'bg-blue-600' : 
+                            msg.role === 'model' ? 'bg-indigo-600' : 'bg-gray-700'
                         }`}>
-                            {msg.role === 'model' && <div className="flex items-center gap-1 mb-1 text-xs text-blue-400 font-medium"><Sparkles size={10}/> WebCria</div>}
-                            {msg.text}
-                            {msg.isPlan && msg.planData && (
-                                <div className="mt-3 bg-gray-900 rounded p-2 border border-gray-700">
-                                    <div className="text-xs font-mono mb-2 text-green-400">Plano Gerado:</div>
-                                    <div className="grid gap-2">
-                                        <button 
-                                            onClick={() => handleApprovePlan('frontend')}
-                                            className="flex items-center gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-600 transition"
-                                        >
-                                            <Monitor size={12}/> Criar Frontend
-                                        </button>
-                                        <button 
-                                            onClick={() => handleApprovePlan('backend')}
-                                            className="flex items-center gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-600 transition"
-                                        >
-                                            <Server size={12}/> Criar Backend
-                                        </button>
+                            {msg.role === 'user' ? <User size={14} /> : 
+                             msg.role === 'model' ? <Bot size={14} /> : <Zap size={14} />}
+                        </div>
+
+                        {/* Bubble */}
+                        <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">
+                                    {msg.role === 'user' ? 'Você' : msg.role === 'model' ? 'WebCria' : 'Sistema'}
+                                </span>
+                                <span className="text-[10px] text-gray-600 flex items-center gap-0.5">
+                                    {new Date(parseInt(msg.id)).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </span>
+                            </div>
+
+                            <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm whitespace-pre-wrap ${
+                                msg.role === 'user' 
+                                ? 'bg-blue-600 text-white rounded-tr-none' 
+                                : msg.role === 'system'
+                                ? 'bg-gray-800/50 text-gray-400 text-xs border border-dashed border-gray-700 w-full text-center'
+                                : 'bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700'
+                            }`}>
+                                {renderMessageText(msg.text)}
+
+                                {msg.isPlan && msg.planData && (
+                                    <div className="mt-3 bg-gray-900 rounded-lg p-3 border border-gray-700">
+                                        <div className="text-xs font-mono mb-2 text-green-400 font-bold uppercase flex items-center gap-2">
+                                            <Sparkles size={10}/> Plano Sugerido
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <button 
+                                                onClick={() => handleApprovePlan('frontend')}
+                                                className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group"
+                                            >
+                                                <span className="flex items-center gap-2"><Monitor size={12}/> Criar Frontend</span>
+                                                <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400"/>
+                                            </button>
+                                            <button 
+                                                onClick={() => handleApprovePlan('backend')}
+                                                className="flex items-center justify-between gap-2 text-xs bg-gray-800 hover:bg-gray-700 p-2.5 rounded border border-gray-600 transition group"
+                                            >
+                                                <span className="flex items-center gap-2"><Server size={12}/> Criar Backend</span>
+                                                <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-purple-400"/>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            {msg.suggestedFile && (
-                                <button 
-                                    onClick={() => handleCreateSuggestion(msg.suggestedFile!)}
-                                    className="mt-2 w-full text-xs flex items-center justify-center gap-1 bg-blue-900/30 hover:bg-blue-800/50 text-blue-300 py-1.5 rounded border border-blue-900 transition"
-                                >
-                                    <Plus size={10} /> Criar {msg.suggestedFile}
-                                </button>
-                            )}
+                                )}
+                                {msg.suggestedFile && (
+                                    <button 
+                                        onClick={() => handleCreateSuggestion(msg.suggestedFile!)}
+                                        className="mt-3 w-full text-xs flex items-center justify-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 py-2 rounded border border-blue-500/30 transition"
+                                    >
+                                        <Plus size={10} /> Criar <span className="font-mono font-bold">{msg.suggestedFile}</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}
                 {isGenerating && (
-                    <div className="flex items-center gap-2 text-gray-500 text-xs pl-2">
-                        <Loader2 size={12} className="animate-spin"/> Pensando e escrevendo...
+                    <div className="flex items-center gap-3 pl-1">
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                             <Loader2 size={14} className="animate-spin text-white"/>
+                        </div>
+                        <div className="text-gray-500 text-xs italic animate-pulse">
+                            Escrevendo código...
+                        </div>
                     </div>
                 )}
                 <div ref={chatEndRef} />
@@ -534,7 +600,7 @@ export function App() {
                         onClick={handleContinueGeneration}
                         className="w-full text-xs flex items-center justify-center gap-1 text-gray-500 hover:text-blue-400 py-2 border-t border-gray-800 hover:bg-gray-900 transition"
                     >
-                        <RotateCcw size={10} /> Continuar geração anterior
+                        <RotateCcw size={10} /> Continuar caso tenha cortado
                     </button>
                  </div>
              )}
@@ -544,30 +610,30 @@ export function App() {
                    <div className="flex items-center gap-2">
                       <button 
                         onClick={() => setIsBatchMode(!isBatchMode)}
-                        className={`flex items-center gap-2 text-[10px] font-medium px-2 py-1 rounded-full transition-colors border ${isBatchMode ? 'bg-purple-900/20 text-purple-300 border-purple-800' : 'bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-500'}`}
+                        className={`flex items-center gap-2 text-[10px] font-medium px-3 py-1.5 rounded-full transition-colors border ${isBatchMode ? 'bg-purple-900/20 text-purple-300 border-purple-800' : 'bg-gray-800 text-gray-500 border-gray-700 hover:border-gray-500'}`}
                         title={isBatchMode ? "A IA criará todos os arquivos sequencialmente" : "A IA criará um arquivo por vez e perguntará"}
                       >
                          {isBatchMode ? <ToggleRight size={14} className="text-purple-400"/> : <ToggleLeft size={14}/>}
-                         {isBatchMode ? "Modo Completo (Batch)" : "Passo a Passo"}
+                         {isBatchMode ? "Modo Automático (Batch)" : "Modo Interativo"}
                       </button>
                    </div>
                 </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="relative">
+                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="relative group">
                     <textarea
                       ref={textareaRef}
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                      placeholder="Instrua a IA..."
-                      className="w-full bg-gray-900 text-white text-sm rounded-xl pl-3 pr-10 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none min-h-[44px] max-h-[120px] placeholder-gray-600 border border-gray-800"
+                      placeholder="Instrua o WebCria..."
+                      className="w-full bg-gray-900 group-hover:bg-gray-800 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-800 resize-none min-h-[50px] max-h-[150px] placeholder-gray-500 border border-gray-800 transition-all shadow-inner"
                       rows={1}
                       disabled={isGenerating}
                     />
                     <button
                       type="submit"
                       disabled={!prompt.trim() || isGenerating}
-                      className="absolute right-2 bottom-2 p-1.5 text-blue-500 hover:text-white hover:bg-blue-600 rounded-lg transition-all disabled:opacity-50 disabled:hover:bg-transparent"
+                      className="absolute right-2 bottom-2.5 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-0 disabled:scale-90 shadow-lg shadow-blue-900/20"
                     >
                       <Send size={16} />
                     </button>

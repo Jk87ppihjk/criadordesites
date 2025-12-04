@@ -46,17 +46,17 @@ MODOS DE OPERAÇÃO:
      
    - **PROIBIDO**: NUNCA escreva texto conversacional (ex: "Aqui está o código", "Espero que goste") DENTRO do bloco do arquivo ou colado nele. Texto conversacional deve vir APÓS o fechamento do bloco de código.
 
-3. **Modo Edição (Patch Inteligente)**:
-   - Ao editar arquivos existentes, se a mudança for pequena (menos de 50% do arquivo), USE PATCH.
-   - Use o formato de PATCH para substituir blocos de código:
+3. **Modo Edição (Atualização)**:
+   - **PREFERÊNCIA**: Se o arquivo tiver menos de 300 linhas, **REESCREVA O ARQUIVO INTEIRO**. É mais seguro e evita erros.
+   - Use PATCH (Blocos SEARCH/REPLACE) **APENAS** se o arquivo for GIGANTE e a mudança for minúscula (ex: mudar 1 linha em 1000).
+   - Formato PATCH:
      <!-- FILENAME: nome.ext -->
      <<<< SEARCH
-     (copie aqui o bloco de código original EXATAMENTE como ele é, caractere por caractere)
+     (copie aqui o bloco de código original EXATAMENTE como ele é, incluindo espaços)
      ====
      (escreva aqui o novo código que substituirá o bloco acima)
      >>>> REPLACE
-   - **IMPORTANTE**: O bloco SEARCH deve ser único no arquivo para que eu saiba onde substituir.
-   - Se você for reescrever o arquivo quase todo, NÃO use patch, envie o arquivo completo.
+   - **CRÍTICO**: O bloco SEARCH deve ser copiado IDÊNTICO ao original. Se você não tem certeza, REESCREVA O ARQUIVO INTEIRO.
 
 REGRAS TÉCNICAS:
 - Idioma: PORTUGUÊS (PT-BR).
@@ -103,6 +103,7 @@ export const streamWebsiteCode = async (
       [MODO PASSO-A-PASSO]
       - Gere APENAS UM arquivo por vez (o mais importante ou o solicitado).
       - Após terminar o arquivo, PARE e pergunte ao usuário se ele quer criar o próximo.
+      - Se for uma EDIÇÃO, prefira reescrever o arquivo completo a menos que seja algo muito pontual.
       `;
 
     const contextPrompt = `
@@ -234,12 +235,15 @@ export const applyPatches = (original: string, patch: string): string => {
   // If not a patch format, return the patch content as is (assuming it's a full rewrite)
   if (!patch.includes('<<<< SEARCH')) return patch;
   
-  let result = original;
+  // Normalize line endings to LF to avoid issues with CRLF vs LF
+  let result = original.replace(/\r\n/g, '\n');
+  const normalizedPatch = patch.replace(/\r\n/g, '\n');
+
   // Regex: Finds SEARCH block and REPLACE block
   const patchRegex = /<<<< SEARCH([\s\S]*?)====([\s\S]*?)>>>> REPLACE/g;
   
   let match;
-  while ((match = patchRegex.exec(patch)) !== null) {
+  while ((match = patchRegex.exec(normalizedPatch)) !== null) {
     const searchBlock = match[1].trim();
     const replaceBlock = match[2].trim();
     
@@ -265,6 +269,7 @@ export const applyPatches = (original: string, patch: string): string => {
     }
     
     console.warn("Patch falhou: Bloco não encontrado via Exact ou Fuzzy match.", "\nProcurado:", searchBlock);
+    // Note: We deliberately do not modify result if patch fails to avoid corruption.
   }
   
   return result;
