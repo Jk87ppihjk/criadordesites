@@ -5,13 +5,14 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      // ADICIONADA ESSA LINHA PARA FORÇAR CAMINHOS RELATIVOS NO BUILD
+      base: './', 
       server: {
         port: 3000,
         host: '0.0.0.0',
       },
-      // ADICIONADO: Configuração de Preview para permitir o host público do Render
       preview: {
-        host: true, // Garante que escuta em 0.0.0.0
+        host: true,
         allowedHosts: ['criadordesites.onrender.com'] 
       },
       plugins: [react()],
