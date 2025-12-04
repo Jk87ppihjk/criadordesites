@@ -131,7 +131,7 @@ export const LivePreview: React.FC<LivePreviewProps> = ({ code, isGenerating, ac
                         <div className="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden">
                             <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 w-full animate-progress origin-left"></div>
                         </div>
-                        <p className="text-sm font-medium text-blue-200 animate-pulse">WebGenius trabalhando...</p>
+                        <p className="text-sm font-medium text-blue-200 animate-pulse">WebCria trabalhando...</p>
                     </>
                 )}
              </div>

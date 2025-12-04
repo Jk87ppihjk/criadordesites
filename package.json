@@ -1,13 +1,12 @@
 {
-  "name": "webgenius-ai-builder",
+  "name": "webcria-ai-builder",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview", 
-    "start": "vite preview --port $PORT" 
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^19.2.1",

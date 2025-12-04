@@ -5,7 +5,7 @@ const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 const BASE_SYSTEM_INSTRUCTION = `
-Você é o WebGenius, um Arquiteto de Software Sênior e Desenvolvedor Full Stack.
+Você é o WebCria, um Arquiteto de Software Sênior e Desenvolvedor Full Stack.
 
 MODOS DE OPERAÇÃO:
 1. **Arquiteto (Planejamento)**: Se o usuário pedir um sistema complexo:

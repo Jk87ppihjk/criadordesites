@@ -192,7 +192,7 @@ export function App() {
           });
 
           // Check for NEXT FILE tag from Batch Mode
-          const nextFileRegex = //i; // <--- CORREÇÃO DA REGEX AQUI!
+          const nextFileRegex = /<!-- NEXT: (.+?) -->/i;
           const nextFileMatch = fullResponse.match(nextFileRegex);
           let nextFile = null;
           if (nextFileMatch) {
@@ -245,7 +245,7 @@ export function App() {
     if (!isGenerating && isBatchMode && chatHistory.length > 0) {
         const lastMsg = chatHistory[chatHistory.length - 1];
         if (lastMsg.role === 'model') {
-            const nextFileRegex = //i;
+            const nextFileRegex = /<!-- NEXT: (.+?) -->/i;
             const match = lastMsg.text.match(nextFileRegex);
             if (match) {
                 const fileToCreate = match[1].trim();
@@ -321,7 +321,7 @@ export function App() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = "projeto-webgenius.zip";
+    a.download = "projeto-webcria.zip";
     a.click();
   };
 
@@ -349,7 +349,7 @@ export function App() {
                 <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
                    <Sparkles size={24} className="text-white" />
                 </div>
-                <h1 className="text-4xl font-bold tracking-tight">WebGenius AI</h1>
+                <h1 className="text-4xl font-bold tracking-tight">WebCria AI</h1>
               </div>
               <h2 className="text-5xl font-extrabold mb-6 leading-tight">
                 Crie Softwares <br/>
@@ -407,7 +407,7 @@ export function App() {
           <div onClick={() => setAppMode('welcome')} className="cursor-pointer w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20 hover:scale-105 transition">
             <Sparkles size={16} className="text-white" />
           </div>
-          <h1 className="font-bold text-sm tracking-tight text-gray-100">WebGenius AI</h1>
+          <h1 className="font-bold text-sm tracking-tight text-gray-100">WebCria AI</h1>
         </div>
         
         <div className="flex items-center gap-3">
@@ -488,7 +488,7 @@ export function App() {
                             ? 'bg-gray-800/50 text-gray-400 text-xs border border-dashed border-gray-700 w-full text-center'
                             : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700'
                         }`}>
-                            {msg.role === 'model' && <div className="flex items-center gap-1 mb-1 text-xs text-blue-400 font-medium"><Sparkles size={10}/> WebGenius</div>}
+                            {msg.role === 'model' && <div className="flex items-center gap-1 mb-1 text-xs text-blue-400 font-medium"><Sparkles size={10}/> WebCria</div>}
                             {msg.text}
                             {msg.isPlan && msg.planData && (
                                 <div className="mt-3 bg-gray-900 rounded p-2 border border-gray-700">
@@ -632,7 +632,6 @@ export function App() {
           )}
         </div>
       </div>
-    </div> 
     );
   }
 }
