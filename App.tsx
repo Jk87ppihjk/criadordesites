@@ -1,14 +1,16 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight, User, Bot, Clock, Folder } from 'lucide-react';
+import { Send, Zap, Code, Layout, Layers, Loader2, Sparkles, FileCode, Plus, FolderOpen, Download, FileJson, FileText, Database, Copy, Check, Upload, Trash2, ArrowRight, Play, Server, Monitor, RotateCcw, MessageSquare, ToggleLeft, ToggleRight, User, Bot, Clock, Folder, Palette, Blocks } from 'lucide-react';
 import { streamWebsiteCode, cleanCode, parseResponseFiles, extractJsonPlan, applyPatches } from './services/gemini';
 import { CodeViewer } from './components/CodeViewer';
 import { LivePreview } from './components/LivePreview';
-import { FilesMap, AppMode, ChatMessage, ProjectPlan } from './types';
+import { FilesMap, AppMode, ChatMessage, ProjectPlan, AiPersona } from './types';
 // @ts-ignore
 import JSZip from 'jszip';
 
 export function App() {
   const [appMode, setAppMode] = useState<AppMode>('welcome');
+  const [aiPersona, setAiPersona] = useState<AiPersona>('fullstack');
   
   // State: Files
   const [files, setFiles] = useState<FilesMap>({});
@@ -49,30 +51,26 @@ export function App() {
 
   // --- Initialization ---
 
-  const startEmptyProject = () => {
-    setFiles({
-      'frontend/index.html': `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <title>Novo Projeto</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-900 text-white flex items-center justify-center h-screen">
-    <h1 class="text-3xl font-bold">Olá Mundo!</h1>
-</body>
-</html>`
-    });
-    setActiveFilename('frontend/index.html');
+  const startMode = (persona: AiPersona) => {
+    setAiPersona(persona);
     setAppMode('ide');
-    addSystemMessage("Projeto iniciado. Criei a estrutura de pastas para você. O que vamos construir?");
-  };
-
-  const startArchitectMode = () => {
     setFiles({});
     setActiveFilename('');
-    setAppMode('ide');
-    addSystemMessage("Olá! Sou o WebCria, seu arquiteto de software. Descreva o sistema completo que você deseja (ex: 'Uma Loja Virtual de Roupas' ou 'Um Dashboard Financeiro'). Eu criarei o plano de arquitetura e a estrutura de pastas.");
+    
+    let welcomeMsg = "";
+    if (persona === 'frontend') {
+        welcomeMsg = "Olá! Sou seu Especialista Frontend. Focarei em Design, UI/UX e Interatividade. O que vamos desenhar hoje?";
+        setFiles({'frontend/index.html': '<!-- Aguardando design... -->'});
+        setActiveFilename('frontend/index.html');
+    } else if (persona === 'backend') {
+        welcomeMsg = "Olá! Sou seu Arquiteto Backend. Estou pronto para criar APIs robustas com Node.js, Express e MySQL. Qual o escopo do sistema?";
+        setFiles({'backend/README.md': '# Backend Project\n\nInicie o chat para gerar a estrutura.'});
+        setActiveFilename('backend/README.md');
+    } else {
+        welcomeMsg = "Olá! Sou o WebCria Fullstack. Posso criar tanto o visual quanto o servidor. Por onde quer começar?";
+    }
+    
+    addSystemMessage(welcomeMsg);
   };
 
   const handleZipImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,7 +162,8 @@ export function App() {
             });
           }
         },
-        isBatchMode
+        isBatchMode,
+        aiPersona // Passando a persona selecionada
       );
 
       const fullResponse = streamBufferRef.current;
@@ -353,47 +352,68 @@ export function App() {
             <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px]"></div>
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[100px]"></div>
         </div>
-        <div className="z-10 max-w-4xl w-full p-8 grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-           <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                   <Sparkles size={24} className="text-white" />
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight">WebCria AI</h1>
+        <div className="z-10 max-w-5xl w-full p-8 flex flex-col items-center">
+           
+           <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+                 <Sparkles size={24} className="text-white" />
               </div>
-              <h2 className="text-5xl font-extrabold mb-6 leading-tight">
-                Crie Softwares <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">em segundos.</span>
-              </h2>
-              <p className="text-gray-400 text-lg mb-8 leading-relaxed">
-                Um ambiente de desenvolvimento completo. Frontend e Backend separados, automação inteligente e preview em tempo real.
-              </p>
+              <h1 className="text-4xl font-bold tracking-tight">WebCria AI</h1>
            </div>
-           <div className="space-y-4">
-              <button onClick={startEmptyProject} className="w-full bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between">
-                 <div>
-                    <h3 className="font-semibold text-xl mb-1 group-hover:text-blue-400 transition-colors">Projeto Vazio</h3>
-                    <p className="text-sm text-gray-400">Editor limpo com estrutura de pastas.</p>
+           <h2 className="text-4xl font-extrabold mb-8 leading-tight text-center">
+             Escolha seu <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Especialista</span>
+           </h2>
+
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-8">
+              {/* Frontend Card */}
+              <button onClick={() => startMode('frontend')} className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-blue-400 p-6 rounded-2xl text-left transition-all group relative overflow-hidden flex flex-col h-64">
+                 <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4 text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <Palette size={20} />
                  </div>
-                 <ArrowRight className="text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-              </button>
-              <button onClick={startArchitectMode} className="w-full bg-gradient-to-r from-blue-600/10 to-purple-600/10 hover:from-blue-600/20 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between relative overflow-hidden border border-blue-500/30">
-                 <div className="relative z-10">
-                    <h3 className="font-semibold text-xl mb-1 text-blue-200">IA Arquiteto</h3>
-                    <p className="text-sm text-blue-200/60">Planeje sistemas completos (Front + Back).</p>
+                 <h3 className="font-bold text-xl mb-2 text-gray-100">Frontend Expert</h3>
+                 <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                    Especialista em UI/UX, Tailwind CSS e Design. Cria interfaces bonitas e responsivas.
+                 </p>
+                 <div className="mt-auto flex items-center gap-2 text-xs font-mono text-gray-500">
+                    <Monitor size={12}/> HTML • CSS • JS
                  </div>
-                 <Sparkles className="text-blue-400 relative z-10" />
               </button>
-              <div className="relative w-full">
+
+              {/* Backend Card */}
+              <button onClick={() => startMode('backend')} className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-green-400 p-6 rounded-2xl text-left transition-all group relative overflow-hidden flex flex-col h-64">
+                 <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center mb-4 text-green-400 group-hover:bg-green-500 group-hover:text-white transition-colors">
+                    <Server size={20} />
+                 </div>
+                 <h3 className="font-bold text-xl mb-2 text-gray-100">Backend Architect</h3>
+                 <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                    Especialista em Node.js, Banco de Dados (MySQL) e APIs seguras com JWT.
+                 </p>
+                 <div className="mt-auto flex items-center gap-2 text-xs font-mono text-gray-500">
+                    <Database size={12}/> Node • Express • SQL
+                 </div>
+              </button>
+
+              {/* Fullstack Card */}
+              <button onClick={() => startMode('fullstack')} className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 hover:border-purple-400 p-6 rounded-2xl text-left transition-all group relative overflow-hidden flex flex-col h-64">
+                 <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4 text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                    <Layers size={20} />
+                 </div>
+                 <h3 className="font-bold text-xl mb-2 text-gray-100">Full Stack Lead</h3>
+                 <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                    O pacote completo. Cria o sistema inteiro, do banco de dados até o pixel na tela.
+                 </p>
+                 <div className="mt-auto flex items-center gap-2 text-xs font-mono text-gray-500">
+                    <Blocks size={12}/> Sistema Completo
+                 </div>
+              </button>
+           </div>
+           
+           <div className="w-full max-w-lg relative">
                 <input type="file" accept=".zip" onChange={handleZipImport} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" />
-                <div className="w-full bg-gray-800/50 hover:bg-gray-800 border border-gray-700 border-dashed hover:border-gray-500 p-6 rounded-2xl text-left transition-all flex items-center justify-between">
-                    <div>
-                        <h3 className="font-semibold text-xl mb-1">Importar ZIP</h3>
-                        <p className="text-sm text-gray-400">Carregue um projeto existente.</p>
-                    </div>
-                    <Upload className="text-gray-600" />
+                <div className="w-full bg-gray-900/50 hover:bg-gray-800 border border-gray-700 border-dashed hover:border-gray-500 p-4 rounded-xl text-center transition-all flex items-center justify-center gap-3">
+                    <Upload className="text-gray-500" size={16} />
+                    <span className="text-sm text-gray-400 font-medium">Ou importe um arquivo .ZIP existente</span>
                 </div>
-              </div>
            </div>
         </div>
       </div>
@@ -408,6 +428,13 @@ export function App() {
             <Sparkles size={16} className="text-white" />
           </div>
           <h1 className="font-bold text-sm tracking-tight text-gray-100">WebCria AI</h1>
+          <span className={`text-[10px] px-2 py-0.5 rounded border ${
+            aiPersona === 'frontend' ? 'bg-blue-900/30 text-blue-300 border-blue-800' :
+            aiPersona === 'backend' ? 'bg-green-900/30 text-green-300 border-green-800' :
+            'bg-purple-900/30 text-purple-300 border-purple-800'
+          }`}>
+            {aiPersona === 'frontend' ? 'FRONTEND' : aiPersona === 'backend' ? 'BACKEND' : 'FULLSTACK'}
+          </span>
         </div>
         <div className="flex items-center gap-3">
             <button onClick={handleExport} className="flex items-center gap-2 text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md transition border border-gray-700">
@@ -558,7 +585,7 @@ export function App() {
                    </div>
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="relative group">
-                    <textarea ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder="Fale com o arquiteto..." className="w-full bg-gray-900 group-hover:bg-gray-800 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-800 resize-none min-h-[50px] max-h-[150px] placeholder-gray-500 border border-gray-800 transition-all shadow-inner" rows={1} disabled={isGenerating} />
+                    <textarea ref={textareaRef} value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} placeholder={`Fale com o ${aiPersona === 'frontend' ? 'Frontend Expert' : aiPersona === 'backend' ? 'Backend Architect' : 'Fullstack Lead'}...`} className="w-full bg-gray-900 group-hover:bg-gray-800 text-white text-sm rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-gray-800 resize-none min-h-[50px] max-h-[150px] placeholder-gray-500 border border-gray-800 transition-all shadow-inner" rows={1} disabled={isGenerating} />
                     <button type="submit" disabled={!prompt.trim() || isGenerating} className="absolute right-2 bottom-2.5 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all disabled:opacity-0 disabled:scale-90 shadow-lg shadow-blue-900/20">
                       <Send size={16} />
                     </button>

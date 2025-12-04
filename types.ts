@@ -4,6 +4,8 @@ export interface Message {
   content: string;
 }
 
+export type AiPersona = 'frontend' | 'backend' | 'fullstack';
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'system';
