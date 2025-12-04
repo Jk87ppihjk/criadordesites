@@ -370,7 +370,7 @@ export function App() {
                  <ArrowRight className="text-gray-600 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
               </button>
 
-              <button onClick={startArchitectMode} className="w-full bg-gradient-to-r from-blue-600/10 to-purple-600/10 hover:from-blue-600/20 hover:to-purple-600/20 border border-blue-500/30 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between relative overflow-hidden">
+              <button onClick={startArchitectMode} className="w-full bg-gradient-to-r from-blue-600/10 to-purple-600/10 hover:from-blue-600/20 hover:border-blue-500/50 p-6 rounded-2xl text-left transition-all group flex items-center justify-between relative overflow-hidden border border-blue-500/30">
                  <div className="relative z-10">
                     <h3 className="font-semibold text-xl mb-1 text-blue-200">IA Arquiteto</h3>
                     <p className="text-sm text-blue-200/60">Planeje e gere sistemas completos.</p>
